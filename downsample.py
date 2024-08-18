@@ -11,7 +11,8 @@ def process(wav_name):
     # speaker 's5', 'p280', 'p315' are excluded,
     speaker = wav_name[:4]
     wav_path = os.path.join(args.in_dir, speaker, wav_name)
-    if os.path.exists(wav_path) and '_mic2.flac' in wav_path:
+    if os.path.exists(wav_path):
+        print('hello')
         os.makedirs(os.path.join(args.out_dir1, speaker), exist_ok=True)
         os.makedirs(os.path.join(args.out_dir2, speaker), exist_ok=True)
         wav, sr = librosa.load(wav_path)
@@ -21,9 +22,8 @@ def process(wav_name):
             wav = 0.98 * wav / peak
         wav1 = librosa.resample(wav, orig_sr=sr, target_sr=args.sr1)
         wav2 = librosa.resample(wav, orig_sr=sr, target_sr=args.sr2)
-        save_name = wav_name.replace("_mic2.flac", ".wav")
-        save_path1 = os.path.join(args.out_dir1, speaker, save_name)
-        save_path2 = os.path.join(args.out_dir2, speaker, save_name)
+        save_path1 = os.path.join(args.out_dir1, speaker, wav_path)
+        save_path2 = os.path.join(args.out_dir2, speaker, wav_path)
         wavfile.write(
             save_path1,
             args.sr1,
@@ -44,8 +44,9 @@ if __name__ == "__main__":
     parser.add_argument("--out_dir1", type=str, default="./dataset/vctk-16k", help="path to target dir")
     parser.add_argument("--out_dir2", type=str, default="./dataset/vctk-22k", help="path to target dir")
     args = parser.parse_args()
-
-    pool = Pool(processes=cpu_count()-2)
+    os.makedirs(args.out_dir1, exist_ok=True)
+    os.makedirs(args.out_dir2, exist_ok=True)
+    pool = Pool(processes=cpu_count())
 
     for speaker in os.listdir(args.in_dir):
         spk_dir = os.path.join(args.in_dir, speaker)
