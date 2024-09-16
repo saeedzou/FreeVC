@@ -9,6 +9,7 @@
 #  --ptfile: The checkpoint file path.
 #  --spkmodel: The speaker embedding model name.
 import os
+import sys
 import argparse
 import numpy as np
 import torch
@@ -18,7 +19,7 @@ from scipy.io.wavfile import write
 from typing import Dict, List, Tuple
 from tqdm import tqdm
 from functools import lru_cache
-
+import logging
 import utils
 from models import SynthesizerTrn
 from mel_processing import mel_spectrogram_torch
@@ -26,32 +27,33 @@ from speaker_encoder.voice_encoder import SpeakerEncoder
 from pyannote.audio.pipelines.speaker_verification import PretrainedSpeakerEmbedding
 from scipy.spatial.distance import cdist
 
-
-
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logger = logging
 
 class FreeVC:
     def __init__(self, hpfile: str, ptfile: str):
         self.hps = utils.get_hparams_from_file(hpfile)
         self.device = utils.get_device()
 
-        print("Loading model...")
+        logger.info("Loading model...")
         self.net_g = SynthesizerTrn(
             self.hps.data.filter_length // 2 + 1,
             self.hps.train.segment_size // self.hps.data.hop_length,
             **self.hps.model).to(self.device)
         _ = self.net_g.eval()
-        print("Loading checkpoint...")
+        logger.info("Loading checkpoint...")
         _ = utils.load_checkpoint(ptfile, self.net_g, None, True)
 
-        print("Loading WavLM for content...")
+        logger.info("Loading WavLM for content...")
         self.cmodel = utils.get_cmodel()
 
         if self.hps.model.use_spk:
-            print("Loading speaker encoder...")
+            logger.info("Loading speaker encoder...")
             self.smodel = SpeakerEncoder('speaker_encoder/ckpt/pretrained_bak_5805000.pt', device=self.device)
     
     @torch.no_grad
     def convert(self, src_path: str, tgt_path: str) -> np.ndarray:
+        logger.info(f"Loding source: {src_path} and target: {tgt_path}")
         wav_tgt, _ = librosa.load(tgt_path, sr=self.hps.data.sampling_rate)
         wav_tgt, _ = librosa.effects.trim(wav_tgt, top_db=20)
 
@@ -72,8 +74,10 @@ class FreeVC:
 
         # src
         wav_src = torch.from_numpy(librosa.load(src_path, sr=self.hps.data.sampling_rate)[0]).to(self.device).unsqueeze(0)
+        logger.info("Extracting content from source...")
         c = utils.get_content(self.cmodel, wav_src)
 
+        logger.info("Converting...")
         if self.hps.model.use_spk:
             audio = self.net_g.infer(c, g=g_tgt)
         else:
@@ -86,7 +90,7 @@ def load_audio(file_path: str, sr: int = 16000) -> np.ndarray:
 
 def calculate_speaker_embedding(speaker_path: str, speaker_model: PretrainedSpeakerEmbedding, 
                                 device: str = "cuda") -> np.ndarray:
-    # The speaker path contains the path to the speaker audio files.
+    logger.info(f"Calculating speaker embedding for {speaker_path}")
     embeddings = []
     for audio_file in os.listdir(speaker_path):
         if audio_file.endswith(".wav"):
@@ -109,6 +113,7 @@ def distance(embedding1, embedding2):
 
 def select_target_speakers(src_embedding : np.ndarray, 
                            target_embeddings : Dict[str, np.ndarray], n : int = 3) -> List[Tuple[str, float]]:
+    logger.info(f"Selecting {n} target speakers")
     distances = {target: distance(src_embedding, target_embedding) \
                  for target, target_embedding in target_embeddings.items()}
     return sorted(distances.items(), key=lambda x: x[1], reverse=True)[:n]
@@ -116,7 +121,9 @@ def select_target_speakers(src_embedding : np.ndarray,
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(args.save_path, exist_ok=True)
+    logger.info("Initializing FreeVC")
     free_vc = FreeVC(args.hpfile, args.ptfile)
+    logger.info(f"Initializing Speaker Embedding Model {args.spkmodel}")
     speaker_model = PretrainedSpeakerEmbedding(args.spkmodel, device=device)
     
     target_embeddings = calculate_speaker_embeddings(args.target_spk_path, speaker_model, device)
