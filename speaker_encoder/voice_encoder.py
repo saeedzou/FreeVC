@@ -55,7 +55,7 @@ class SpeakerEncoder(nn.Module):
         """
         # Pass the input through the LSTM layers and retrieve the final hidden state of the last 
         # layer. Apply a cutoff to 0 for negative values and L2 normalize the embeddings.
-        _, (hidden, _) = self.lstm(mels)
+        _, (hidden, _) = self.lstm(mels) # shape = (num_layers, batch, hidden_size), hidden[-1] = (batch, hidden_size) last layer
         embeds_raw = self.relu(self.linear(hidden[-1]))
         return embeds_raw / torch.norm(embeds_raw, dim=1, keepdim=True)
     
