@@ -44,7 +44,7 @@ class FreeVC:
         _ = utils.load_checkpoint(ptfile, self.net_g, None, True)
 
         print("Loading WavLM for content...")
-        self.cmodel = utils.get_cmodel(0)
+        self.cmodel = utils.get_cmodel()
 
         if self.hps.model.use_spk:
             print("Loading speaker encoder...")
@@ -128,16 +128,16 @@ def main(args):
         target_file = random.choice([f for f in os.listdir(target_path) if f.endswith('.wav')])
         target = os.path.join(target_path, target_file)
         audio = free_vc.convert(args.source_wav_path, target)
-        write(f"{args.save_path}/{os.path.basename(args.source_spk_path).split('.wav')[0]}_{i}", 16000, audio)
+        write(f"{args.save_path}/{os.path.basename(args.source_wav_path).split('.wav')[0]}_{i}.wav", 16000, audio)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--hpfile", required=True, help="The hyperparameter file path.", default='configs/freevc.json')
-    parser.add_argument("--ptfile", required=True, help="The checkpoint file path.", default='checkpoints/freevc.pth')
-    parser.add_argument("--spkmodel", required=True, help="The speaker embedding model name.", default='speechbrain/spkrec-ecapa-voxceleb')
+    parser.add_argument("--hpfile", required=False, help="The hyperparameter file path.", default='configs/freevc.json')
+    parser.add_argument("--ptfile", required=False, help="The checkpoint file path.", default='checkpoints/freevc.pth')
+    parser.add_argument("--spkmodel", required=False, help="The speaker embedding model name.", default='speechbrain/spkrec-ecapa-voxceleb')
     parser.add_argument("--target_spk_path", required=True, help="The path to the target speakers.")
     parser.add_argument("--source_spk_path", required=True, help="The path to the source speaker.")
     parser.add_argument("--source_wav_path", required=True, help="The path to the source wav file.")
-    parser.add_argument("--save_path", required=True, help="The path to save the converted audio.", default='output')
+    parser.add_argument("--save_path", required=False, help="The path to save the converted audio.", default='output')
     args = parser.parse_args()
     main(args)
