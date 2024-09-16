@@ -27,21 +27,23 @@ if __name__ == "__main__":
     os.makedirs(args.outdir, exist_ok=True)
     hps = utils.get_hparams_from_file(args.hpfile)
 
+    device = utils.get_device()
+
     print("Loading model...")
     net_g = SynthesizerTrn(
         hps.data.filter_length // 2 + 1,
         hps.train.segment_size // hps.data.hop_length,
-        **hps.model).cuda()
+        **hps.model).to(device)
     _ = net_g.eval()
     print("Loading checkpoint...")
     _ = utils.load_checkpoint(args.ptfile, net_g, None, True)
 
     print("Loading WavLM for content...")
-    cmodel = utils.get_cmodel(0)
+    cmodel = utils.get_cmodel()
     
     if hps.model.use_spk:
         print("Loading speaker encoder...")
-        smodel = SpeakerEncoder('speaker_encoder/ckpt/pretrained_bak_5805000.pt')
+        smodel = SpeakerEncoder('speaker_encoder/ckpt/pretrained_bak_5805000.pt', device=device)
 
     print("Processing text...")
     titles, srcs, tgts = [], [], []
@@ -61,9 +63,9 @@ if __name__ == "__main__":
             wav_tgt, _ = librosa.effects.trim(wav_tgt, top_db=20)
             if hps.model.use_spk:
                 g_tgt = smodel.embed_utterance(wav_tgt)
-                g_tgt = torch.from_numpy(g_tgt).unsqueeze(0).cuda()
+                g_tgt = torch.from_numpy(g_tgt).unsqueeze(0).to(device)
             else:
-                wav_tgt = torch.from_numpy(wav_tgt).unsqueeze(0).cuda()
+                wav_tgt = torch.from_numpy(wav_tgt).unsqueeze(0).to(device)
                 mel_tgt = mel_spectrogram_torch(
                     wav_tgt, 
                     hps.data.filter_length,
@@ -76,7 +78,7 @@ if __name__ == "__main__":
                 )
             # src
             wav_src, _ = librosa.load(src, sr=hps.data.sampling_rate)
-            wav_src = torch.from_numpy(wav_src).unsqueeze(0).cuda()
+            wav_src = torch.from_numpy(wav_src).unsqueeze(0).to(device)
             c = utils.get_content(cmodel, wav_src)
             
             if hps.model.use_spk:

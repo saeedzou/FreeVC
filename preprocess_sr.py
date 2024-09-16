@@ -23,7 +23,8 @@ def process(filename):
     os.makedirs(wav_dir, exist_ok=True)
     os.makedirs(ssl_dir, exist_ok=True)
     wav, _ = librosa.load(filename, sr=hps.sampling_rate)
-    wav = torch.from_numpy(wav).unsqueeze(0).cuda()
+    device = utils.get_device()
+    wav = torch.from_numpy(wav).unsqueeze(0).to(device)
     mel = mel_spectrogram_torch(
         wav, 
         hps.n_fft, 
@@ -44,7 +45,7 @@ def process(filename):
         mel_rs = utils.transform(mel, i)
         wav_rs = vocoder(mel_rs)[0][0].detach().cpu().numpy()
         _wav_rs = librosa.resample(wav_rs, orig_sr=hps.sampling_rate, target_sr=args.sr)
-        wav_rs = torch.from_numpy(_wav_rs).cuda().unsqueeze(0)
+        wav_rs = torch.from_numpy(_wav_rs).unsqueeze(0).to(device)
         c = utils.get_content(cmodel, wav_rs)
         ssl_path = os.path.join(ssl_dir, basename.replace(".wav", f"_{i}.pt"))
         torch.save(c.cpu(), ssl_path)
@@ -77,13 +78,14 @@ if __name__ == "__main__":
     print("Loading WavLM for content...")
     checkpoint = torch.load('wavlm/WavLM-Large.pt')
     cfg = WavLMConfig(checkpoint['cfg'])
-    cmodel = WavLM(cfg).cuda()
+    device = utils.get_device()
+    cmodel = WavLM(cfg).to(device)
     cmodel.load_state_dict(checkpoint['model'])
     cmodel.eval()
     print("Loaded WavLM.")
 
     print("Loading vocoder...")
-    vocoder = utils.get_vocoder(0)
+    vocoder = utils.get_vocoder()
     vocoder.eval()
     print("Loaded vocoder.")
     

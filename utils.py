@@ -19,11 +19,19 @@ MATPLOTLIB_FLAG = False
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging
 
+def get_device(device=None):
+    if device is None:
+      device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    elif isinstance(device, str):
+        device = torch.device(device)
+    return device
 
-def get_cmodel(rank):
+def get_cmodel():
     checkpoint = torch.load('wavlm/WavLM-Large.pt')
     cfg = WavLMConfig(checkpoint['cfg'])
-    cmodel = WavLM(cfg).cuda(rank)
+    # Get the target device
+    device = get_device()
+    cmodel = WavLM(cfg).to(device)
     cmodel.load_state_dict(checkpoint['model'])
     cmodel.eval()
     return cmodel
@@ -36,16 +44,17 @@ def get_content(cmodel, y):
     return c
 
 
-def get_vocoder(rank):
+def get_vocoder():
     with open("hifigan/config.json", "r") as f:
         config = json.load(f)
     config = hifigan.AttrDict(config)
     vocoder = hifigan.Generator(config)
+    device = get_device()
     ckpt = torch.load("hifigan/generator_v1")
     vocoder.load_state_dict(ckpt["generator"])
     vocoder.eval()
     vocoder.remove_weight_norm()
-    vocoder.cuda(rank)
+    vocoder.to(device)
     return vocoder
     
     
