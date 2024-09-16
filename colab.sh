@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# Clone FreeVC repository
-git clone https://github.com/OlaWod/FreeVC.git
-
-# Change to FreeVC directory
-cd FreeVC
-
 # Install requirements
 pip install -r requirements.txt
 pip install webrtcvad
