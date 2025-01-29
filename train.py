@@ -46,7 +46,12 @@ def main():
   os.environ['MASTER_ADDR'] = 'localhost'
   os.environ['MASTER_PORT'] = hps.train.port
 
-  mp.spawn(run, nprocs=n_gpus, args=(n_gpus, hps,))
+  n_gpus = torch.cuda.device_count()
+  if n_gpus > 1:
+      mp.spawn(run, nprocs=n_gpus, args=(n_gpus, hps,))
+  else:
+      run(0, 1, hps)
+
 
 
 def run(rank, n_gpus, hps):
@@ -71,11 +76,11 @@ def run(rank, n_gpus, hps):
       rank=rank,
       shuffle=True)
   collate_fn = TextAudioSpeakerCollate(hps)
-  train_loader = DataLoader(train_dataset, num_workers=8, shuffle=False, pin_memory=True,
+  train_loader = DataLoader(train_dataset, num_workers=2, shuffle=False, pin_memory=True,
       collate_fn=collate_fn, batch_sampler=train_sampler)
   if rank == 0:
     eval_dataset = TextAudioSpeakerLoader(hps.data.validation_files, hps)
-    eval_loader = DataLoader(eval_dataset, num_workers=8, shuffle=True,
+    eval_loader = DataLoader(eval_dataset, num_workers=2, shuffle=True,
         batch_size=hps.train.batch_size, pin_memory=False,
         drop_last=False, collate_fn=collate_fn)
 
@@ -94,8 +99,9 @@ def run(rank, n_gpus, hps):
       hps.train.learning_rate, 
       betas=hps.train.betas, 
       eps=hps.train.eps)
-  net_g = DDP(net_g, device_ids=[rank])#, find_unused_parameters=True)
-  net_d = DDP(net_d, device_ids=[rank])
+  net_g = net_g.cuda(rank)
+  net_d = net_d.cuda(rank)
+
 
   try:
     _, _, _, epoch_str = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g, optim_g)
@@ -250,7 +256,11 @@ def evaluate(hps, generator, eval_loader, writer_eval):
         hps.data.sampling_rate,
         hps.data.mel_fmin, 
         hps.data.mel_fmax)
-      y_hat = generator.module.infer(c, g=g, mel=mel)
+      if hasattr(generator, "module"):
+          y_hat = generator.module.infer(c, g=g, mel=mel)  # Use .module if wrapped in DP/DDP
+      else:
+          y_hat = generator.infer(c, g=g, mel=mel)  # Use normal access if not wrapped
+
       
       y_hat_mel = mel_spectrogram_torch(
         y_hat.squeeze(1).float(),
